@@ -1,51 +1,19 @@
-# ===== C++ build files =====
+# ===== C++ build outputs =====
 *.o
-*.obj
-*.exe
 *.out
-*.a
-*.so
-*.dll
+*.exe
 *.dylib
 
-# Mac executable output
-main
+# Executable files (your compiled backend/server binaries)
 server_app
-*.run
+backend_app
+main
 
 # ===== macOS system files =====
 .DS_Store
-.AppleDouble
-.LSOverride
 
 # ===== VSCode settings =====
 .vscode/
-*.code-workspace
 
-# ===== Logs =====
-*.log
-
-# ===== Temporary files =====
-*.tmp
-*.swp
-*~
-
-# ===== Backup files =====
-*.bak
-
-# ===== Environment files =====
-.env
-*.env
-
-# ===== clang / lldb =====
+# ===== Debugger folders =====
 *.dSYM/
-
-# ===== CMake (just in case) =====
-CMakeFiles/
-CMakeCache.txt
-cmake_install.cmake
-Makefile
-build/
-
-# ===== Test script outputs =====
-test_results/
