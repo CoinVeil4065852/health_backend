@@ -1,0 +1,51 @@
+# ===== C++ build files =====
+*.o
+*.obj
+*.exe
+*.out
+*.a
+*.so
+*.dll
+*.dylib
+
+# Mac executable output
+main
+server_app
+*.run
+
+# ===== macOS system files =====
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# ===== VSCode settings =====
+.vscode/
+*.code-workspace
+
+# ===== Logs =====
+*.log
+
+# ===== Temporary files =====
+*.tmp
+*.swp
+*~
+
+# ===== Backup files =====
+*.bak
+
+# ===== Environment files =====
+.env
+*.env
+
+# ===== clang / lldb =====
+*.dSYM/
+
+# ===== CMake (just in case) =====
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+build/
+
+# ===== Test script outputs =====
+test_results/
