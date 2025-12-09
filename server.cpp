@@ -379,6 +379,7 @@ int main() {
         res.set_content(os.str(), "application/json");
     });
 
-    cout << "Server started at http://localhost:8080\n";
-    svr.listen("0.0.0.0", 8080);  // 開在 8080 port
+    cout << "Server started at http://0.0.0.0:8080" << endl;
+    svr.listen("0.0.0.0", 8080);
+
 }
