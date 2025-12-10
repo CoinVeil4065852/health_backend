@@ -54,18 +54,18 @@ health_backend/
 │   ├── json.hpp                 # (replaced by nlohmann/json)
 │
 └── data/
-    ├── storage.json             # Auto-generated persistent storage
-    └── storage.example.json     # Example layout (no real data)
+├── storage.json             # Auto-generated persistent storage
+└── storage.example.json     # Example layout (no real data)
 
 ---
 
-Build Instructions
+## Build Instructions
 
-Make sure you are inside the project folder:
+# Make sure you are inside the project folder:
 
 cd health_backend
 
-Compile the HTTP server:
+# Compile the HTTP server:
 
 g++ -std=c++17 \
   server.cpp \
@@ -82,7 +82,7 @@ g++ -std=c++17 \
 
 ---
 
-Run the Server
+## Run the Server
 
 ./server_app
 
@@ -119,93 +119,7 @@ http://<你的IP>:8080
 
 所有 API（除了 register/login）都必須加上：
 
-X-Auth-Token: <token>
-
-
----
-
-## API Endpoints Overview
-
-### User APIs
-
-| Method | Endpoint     | Description        | Auth          |
-|--------|-------------|--------------------|---------------|
-| POST   | `/register` | Register new user  | ❌            |
-| POST   | `/login`    | Login and get token| ❌            |
-| GET    | `/user/bmi` | Get BMI            | ✅ X-Auth-Token |
-
----
-
-### Water APIs
-
-| Method | Endpoint                    | Description                          | Auth |
-|--------|-----------------------------|--------------------------------------|------|
-| POST   | `/water/add`                | Add a water record                   | ✅   |
-| POST   | `/water/edit`               | Edit a water record (by index)       | ✅   |
-| POST   | `/water/delete`             | Delete a water record (by index)     | ✅   |
-| GET    | `/water/all`                | Get all water records                | ✅   |
-| GET    | `/water/weekly_average`     | Get weekly average (last up to 7)    | ✅   |
-| GET    | `/water/is_enough?goal=1500`| Check if weekly avg ≥ goal (ml/day)  | ✅   |
-
----
-
-### Sleep APIs
-
-| Method | Endpoint                      | Description                          | Auth |
-|--------|-------------------------------|--------------------------------------|------|
-| POST   | `/sleep/add`                  | Add a sleep record                   | ✅   |
-| POST   | `/sleep/edit`                 | Edit a sleep record (by index)       | ✅   |
-| POST   | `/sleep/delete`               | Delete a sleep record (by index)     | ✅   |
-| GET    | `/sleep/all`                  | Get all sleep records                | ✅   |
-| GET    | `/sleep/last_hours`           | Get last sleep hours                 | ✅   |
-| GET    | `/sleep/is_enough?min=7`      | Check if last sleep ≥ min hours      | ✅   |
-
----
-
-### Activity APIs
-
-| Method | Endpoint                        | Description                          | Auth |
-|--------|----------------------------------|--------------------------------------|------|
-| POST   | `/activity/add`                 | Add an activity record               | ✅   |
-| POST   | `/activity/edit`                | Edit an activity record (by index)   | ✅   |
-| POST   | `/activity/delete`              | Delete an activity record (by index) | ✅   |
-| GET    | `/activity/all`                 | Get all activity records             | ✅   |
-| GET    | `/activity/sort_by_duration`    | Sort activities by duration (desc)   | ✅   |
-
----
-
-### Other Category APIs
-
-| Method | Endpoint                                   | Description                                | Auth |
-|--------|--------------------------------------------|--------------------------------------------|------|
-| POST   | `/other/create`                           | Create a new category                      | ✅   |
-| POST   | `/other/add_record`                       | Add record to a category (by name + index) | ✅   |
-| POST   | `/other/edit_record`                      | Edit a record in a category                | ✅   |
-| POST   | `/other/delete_record`                    | Delete a record in a category              | ✅   |
-| GET    | `/other/categories`                       | List all category names                    | ✅   |
-| GET    | `/other/get_records?category=<name>`      | Get all records in a category              | ✅   |
-
----
-
-Example Requests (curl)
-
-Register
-
-curl -X POST http://localhost:8080/register \
-  -H "Content-Type: application/json" \
-  -d '{"name":"Alice","age":20,"weightKg":50,"heightM":1.60,"password":"abc123"}'
-
-Login
-
-curl -X POST http://localhost:8080/login \
-  -H "Content-Type: application/json" \
-  -d '{"name":"Alice","password":"abc123"}'
-
-BMI
-
-curl http://localhost:8080/user/bmi \
-  -H "X-Auth-Token: <token>"
-
+Token: <token>
 
 ---
 

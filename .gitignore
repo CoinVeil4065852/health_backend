@@ -1,48 +1,59 @@
-# ================================
-# Build outputs / binaries
-# ================================
-server_app
-*.out
-*.exe
+# ==========================
+#   Build Artifacts
+# ==========================
+/build/
+/cmake-build-debug/
+/cmake-build-release/
+/CMakeFiles/
+CMakeCache.txt
+Makefile
 *.o
 *.obj
-
-# VSCode temp runner
-tempCodeRunnerFile.*
-
-# ================================
-# OS / Editor temporary files
-# ================================
-.DS_Store
-Thumbs.db
-.vscode/
-*.swp
-*.swo
-
-# ================================
-# CMake / build folders (如果未來用 CMake)
-# ================================
-/build/
-/cmake-build*/
-
-# ================================
-# JSON data storage (runtime generated)
-# ================================
-data/storage.json
-
-# If you want to ignore temp backup files
-*.bak
-*.tmp
-
-# ================================
-# Logs
-# ================================
-*.log
-logs/
-
-# ================================
-# Ignore compiled libraries
-# ================================
+*.out
+*.exe
 *.a
 *.so
+*.dylib
 *.dll
+
+# ==========================
+#   macOS Junk Files
+# ==========================
+.DS_Store
+.DS_Store?
+.AppleDouble
+.LSOverride
+
+# ==========================
+#   VSCode / CLion
+# ==========================
+.vscode/
+.idea/
+*.code-workspace
+
+# ==========================
+#   Executables
+# ==========================
+server
+main
+run
+
+# ==========================
+#   Logs
+# ==========================
+*.log
+
+# ==========================
+#   Data Files (runtime)
+#   - Keep folder, ignore content
+# ==========================
+data/*
+!data/.gitkeep
+
+# ==========================
+#   JSON auto-save (if any)
+# ==========================
+*.json
+
+# Keep your source JSON config if needed:
+!config.json
