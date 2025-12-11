@@ -12,6 +12,7 @@
 #include <fstream>
 #include <random>
 #include <iostream>
+#include "../helpers/Logger.hpp"
 
 // 使用 nlohmann::json 方便寫成 json
 using nlohmann::json;
@@ -132,7 +133,7 @@ void HealthBackend::loadFromFile() {
     try {
         in >> j;
     } catch (...) {
-        std::cerr << "Failed to parse " << storagePath << ", starting empty.\n";
+        util::Logger::error(std::string("Failed to parse ") + storagePath + ", starting empty.");
         return;
     }
 
@@ -273,7 +274,7 @@ void HealthBackend::saveToFile() const {
 
     std::ofstream out(storagePath);
     if (!out) {
-        std::cerr << "Failed to open " << storagePath << " for writing.\n";
+        util::Logger::error(std::string("Failed to open ") + storagePath + " for writing.");
         return;
     }
     out << j.dump(2);
@@ -332,6 +333,7 @@ bool HealthBackend::registerUser(const std::string& name,
 
     usersByName[name] = std::move(data);
     saveToFile();
+    util::Logger::info(std::string("registerUser: created user: ") + name);
     return true;
 }
 
@@ -339,15 +341,18 @@ std::string HealthBackend::login(const std::string& name,
                                  const std::string& password) {
     auto it = usersByName.find(name);
     if (it == usersByName.end()) {
+        util::Logger::warn(std::string("login: user not found: ") + name);
         return "INVALID";
     }
     if (it->second.password != password) {
+        util::Logger::warn(std::string("login: bad password for user: ") + name);
         return "INVALID";
     }
 
     // 產生新的 token
     std::string token = generateToken();
     tokenToName[token] = name;
+    util::Logger::info(std::string("login: user= ") + name + " token=" + token);
     return token;
 }
 
@@ -426,7 +431,10 @@ bool HealthBackend::deleteWater(const std::string& token,
 bool HealthBackend::addSleep(const std::string& token,
                              const std::string& datetime,
                              double             hours) {
-    if (hours < 0.0) return false;
+    if (hours < 0.0) {
+        util::Logger::warn(std::string("addSleep: invalid hours: ") + std::to_string(hours));
+        return false;
+    }
     UserData* user = getUserByToken(token);
     if (!user) return false;
 
@@ -435,6 +443,7 @@ bool HealthBackend::addSleep(const std::string& token,
     s.hours    = hours;
     user->sleeps.push_back(s);
     saveToFile();
+    util::Logger::info(std::string("addSleep: user token found, added sleep for token: ") + token);
     return true;
 }
 

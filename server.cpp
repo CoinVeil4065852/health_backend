@@ -6,8 +6,13 @@
 #include <vector>
 
 #include "httplib.h"
+#include <unordered_map>
+#include <mutex>
+#include <chrono>
 #include "backend/HealthBackend.hpp"
 #include "external/json.hpp"
+#include "helpers/Logger.hpp"
+#include <cstdlib>
 
 using json = nlohmann::ordered_json;
 
@@ -31,6 +36,24 @@ int main() {
     HealthBackend backend;
     httplib::Server svr;
 
+    // Initialize logger -------------------------------
+    const char *logFileEnv = std::getenv("LOG_FILE");
+    std::string logFilePath = logFileEnv ? logFileEnv : "logs/server.log";
+    const char *logLevelEnv = std::getenv("LOG_LEVEL");
+    util::LogLevel level = util::LogLevel::Info;
+    if (logLevelEnv) {
+        std::string s = logLevelEnv;
+        if (s == "DEBUG") level = util::LogLevel::Debug;
+        else if (s == "WARN") level = util::LogLevel::Warning;
+        else if (s == "ERROR") level = util::LogLevel::Error;
+        else level = util::LogLevel::Info;
+    }
+    util::Logger::init(logFilePath, level);
+    // --------------------------------------------------
+
+    // CORS: respond to preflight and add headers to every response
+    svr.Options(R"(.*)", [](const httplib::Request &req, httplib::Response &res) {
+        // Allow requests from any origin (adjust if you want to restrict)
     // ===== NEW: CORS 設定（前端在別的 Port/Domain 時也能用） =====
     svr.Options(R"(.*)", [](const httplib::Request & /*req*/, httplib::Response &res) {
         res.set_header("Access-Control-Allow-Origin", "*");
@@ -40,6 +63,35 @@ int main() {
         res.status = 204; // No Content
     });
 
+    // Log exceptions
+    svr.set_exception_handler([](const httplib::Request &req, httplib::Response &res, std::exception_ptr ep) {
+        (void)res; // we don't modify response here
+        std::string origin = req.has_header("Origin") ? req.get_header_value("Origin") : "-";
+        try {
+            if (ep) std::rethrow_exception(ep);
+        } catch (const std::exception &e) {
+            util::Logger::error(std::string("Unhandled exception handling request: ") + req.method + " " + req.path + " Origin:" + origin + " error: " + e.what());
+        } catch (...) {
+            util::Logger::error(std::string("Unhandled exception handling request: ") + req.method + " " + req.path + " Origin:" + origin + " error: unknown");
+        }
+    });
+
+    // We'll track request start times so we can log durations.
+    static std::mutex _req_mtx;
+    static std::unordered_map<const httplib::Request *, std::chrono::steady_clock::time_point> _req_start;
+
+    // Pre-routing: record start time
+    svr.set_pre_routing_handler([&](const httplib::Request &req, httplib::Response & /*res*/) -> httplib::Server::HandlerResponse {
+        std::lock_guard<std::mutex> lk(_req_mtx);
+        _req_start[&req] = std::chrono::steady_clock::now();
+        auto origin = req.has_header("Origin") ? req.get_header_value("Origin") : "-";
+        util::Logger::info(req.method + std::string(" ") + req.path + " Origin:" + origin);
+        return httplib::Server::HandlerResponse::Unhandled;
+    });
+
+    // Inject CORS headers and log request info via a post-routing hook
+    svr.set_post_routing_handler([&](const httplib::Request &req, httplib::Response &res) {
+        // Only add header if it's not already present
     svr.set_post_routing_handler([](const httplib::Request & /*req*/, httplib::Response &res) {
         if (res.get_header_value("Access-Control-Allow-Origin").empty()) {
             res.set_header("Access-Control-Allow-Origin", "*");
@@ -50,6 +102,32 @@ int main() {
         if (res.get_header_value("Access-Control-Allow-Methods").empty()) {
             res.set_header("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS");
         }
+        // Log request duration
+        std::chrono::steady_clock::time_point start;
+        {
+            std::lock_guard<std::mutex> lk(_req_mtx);
+            auto it = _req_start.find(&req);
+            if (it != _req_start.end()) {
+                start = it->second;
+                _req_start.erase(it);
+            }
+        }
+        if (start.time_since_epoch().count() > 0) {
+            auto dur = std::chrono::duration_cast<std::chrono::milliseconds>(
+                    std::chrono::steady_clock::now() - start).count();
+            util::Logger::info(req.method + std::string(" ") + req.path + " -> " + std::to_string(res.status) + " (" + std::to_string(dur) + " ms)");
+        }
+    });
+
+    // Set httplib server-level logging to route through our Logger
+    svr.set_logger([](const httplib::Request &req, const httplib::Response &res) {
+        (void)res;
+        auto origin = req.has_header("Origin") ? req.get_header_value("Origin") : "-";
+        util::Logger::debug(std::string("httplib log: ") + req.method + " " + req.path + " Origin:" + origin);
+    });
+    svr.set_error_logger([](const httplib::Error &err, const httplib::Request *req) {
+        std::string path = req ? req->path : "-";
+        util::Logger::warn(std::string("httplib error: ") + std::to_string(static_cast<int>(err)) + " path:" + path);
     });
 
     // ======================
@@ -116,6 +194,7 @@ int main() {
             out["token"] = token;
             res.status = 201;
             res.set_content(out.dump(), "application/json");
+            util::Logger::info(std::string("POST /register: user=") + name + " token=" + token);
         } catch (const std::exception &e) {
             json err;
             err["errorMessage"] = std::string("Invalid JSON: ") + e.what();
@@ -148,6 +227,7 @@ int main() {
                 err["errorMessage"] = "Invalid name or password";
                 res.status = 401;
                 res.set_content(err.dump(), "application/json");
+                util::Logger::warn(std::string("POST /login failed: user=") + name);
                 return;
             }
 
@@ -155,6 +235,7 @@ int main() {
             out["token"] = token;
             res.status = 200;
             res.set_content(out.dump(), "application/json");
+            util::Logger::info(std::string("POST /login: user=") + name + " token=" + token);
         } catch (const std::exception &e) {
             json err;
             err["errorMessage"] = std::string("Invalid JSON: ") + e.what();
@@ -444,6 +525,7 @@ int main() {
                 err["errorMessage"] = "Failed to add sleep record";
                 res.status = 400;
                 res.set_content(err.dump(), "application/json");
+                util::Logger::warn(std::string("POST /sleeps failed: token=") + token + " hours=" + std::to_string(hours));
                 return;
             }
 
@@ -978,7 +1060,7 @@ int main() {
             const auto &r   = records[idx];
 
             json out;
-            out["id"]         = std::to_string(idx);
+            out["id"]         = makeCategoryItemId(idx);
             out["categoryId"] = categoryId;
             out["datetime"]   = r.datetime;
             out["note"]       = r.note;
@@ -993,7 +1075,7 @@ int main() {
     });
 
     // PATCH /category/{categoryId}/{itemId}
-    svr.Patch(R"(/category/([^/]+)/(\d+))", [&backend](const httplib::Request &req, httplib::Response &res) {
+    svr.Patch(R"(/category/([^/]+)/([^/]+))", [&backend](const httplib::Request &req, httplib::Response &res) {
         std::string token = getTokenFromAuthHeader(req);
         if (token.empty()) {
             json err;
@@ -1005,11 +1087,8 @@ int main() {
 
         std::string categoryId = req.matches[1];
         std::string itemIdStr  = req.matches[2];
-
         std::size_t index = 0;
-        try {
-            index = static_cast<std::size_t>(std::stoul(itemIdStr));
-        } catch (...) {
+        if (!parseCategoryItemId(itemIdStr, index)) {
             json err;
             err["errorMessage"] = "Invalid item id";
             res.status = 400;
@@ -1050,7 +1129,7 @@ int main() {
             }
 
             json out;
-            out["id"]         = itemIdStr;
+            out["id"]         = makeCategoryItemId(index);
             out["categoryId"] = categoryId;
             out["datetime"]   = newDatetime;
             out["note"]       = newNote;
@@ -1065,7 +1144,7 @@ int main() {
     });
 
     // DELETE /category/{categoryId}/{itemId}
-    svr.Delete(R"(/category/([^/]+)/(\d+))", [&backend](const httplib::Request &req, httplib::Response &res) {
+    svr.Delete(R"(/category/([^/]+)/([^/]+))", [&backend](const httplib::Request &req, httplib::Response &res) {
         std::string token = getTokenFromAuthHeader(req);
         if (token.empty()) {
             json err;
@@ -1077,11 +1156,8 @@ int main() {
 
         std::string categoryId = req.matches[1];
         std::string itemIdStr  = req.matches[2];
-
         std::size_t index = 0;
-        try {
-            index = static_cast<std::size_t>(std::stoul(itemIdStr));
-        } catch (...) {
+        if (!parseCategoryItemId(itemIdStr, index)) {
             json err;
             err["errorMessage"] = "Invalid item id";
             res.status = 400;
@@ -1102,8 +1178,10 @@ int main() {
         res.set_content("", "application/json");
     });
 
-    std::cout << "Server started at http://0.0.0.0:8080\n";
+    util::Logger::info("Server started at http://0.0.0.0:8080");
     svr.listen("0.0.0.0", 8080);
+
+    util::Logger::shutdown();
 
     return 0;
 }
