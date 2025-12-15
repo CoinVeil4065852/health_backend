@@ -8,13 +8,32 @@
 
 ## Build
 
-```txt
-g++ -std=c++17 \
-   server.cpp \
-   backend/HealthBackend.cpp \
-   helpers/Logger.cpp \
-   -o server_app
-./server_app
+Prerequisites:
+
+- **C++ compiler** with C++17 support (e.g. `g++` or `clang++`).
+- **CMake** (recommended) and standard build tools (e.g. `make`, `ninja`).
+
+Quick build using CMake:
+
+```bash
+mkdir -p build
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build -- -j
+```
+
+The resulting binary is at `./build/bin/HealthServer`.
+
+Run the server (defaults to port 8080):
+
+```bash
+./build/bin/HealthServer
+# Press Enter to use the default port (8080)
+```
+
+Run API tests:
+
+```bash
+node test/test.js
 ```
 
 ## Frontend
