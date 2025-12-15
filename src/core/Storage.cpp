@@ -1,10 +1,11 @@
 #include "../../include/core/Storage.hpp"
 
-#include <fstream>
 #include <sys/stat.h>
 #include <unistd.h>
-#include <iostream>
+
 #include <filesystem>
+#include <fstream>
+#include <iostream>
 
 #ifdef __APPLE__
 #include <mach-o/dyld.h>
@@ -12,8 +13,8 @@
 
 using nlohmann::json;
 
-bool Storage::dirExists(const std::string &path) {
-  struct stat st {};
+bool Storage::dirExists(const std::string& path) {
+  struct stat st{};
   if (stat(path.c_str(), &st) != 0) return false;
   return S_ISDIR(st.st_mode);
 }
@@ -55,7 +56,7 @@ Storage::Storage() {
   storagePath = "data/storage.json";
 }
 
-Storage::Storage(const std::string &path) : storagePath(path) {}
+Storage::Storage(const std::string& path) : storagePath(path) {}
 
 json Storage::load() const {
   std::ifstream in(storagePath);
@@ -69,7 +70,7 @@ json Storage::load() const {
   return j;
 }
 
-bool Storage::save(const json &j) const {
+bool Storage::save(const json& j) const {
   ensureStorageDirExists();
   try {
     std::ofstream out(storagePath);

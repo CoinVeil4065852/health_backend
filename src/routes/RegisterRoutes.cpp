@@ -1,12 +1,12 @@
+#include "../../include/routes/ActivityRoutes.hpp"
 #include "../../include/routes/AuthRoutes.hpp"
+#include "../../include/routes/CategoryRoutes.hpp"
 #include "../../include/routes/HealthRoutes.hpp"
+#include "../../include/routes/SleepRoutes.hpp"
 #include "../../include/routes/UserRoutes.hpp"
 #include "../../include/routes/WaterRoutes.hpp"
-#include "../../include/routes/SleepRoutes.hpp"
-#include "../../include/routes/ActivityRoutes.hpp"
-#include "../../include/routes/CategoryRoutes.hpp"
 
-void registerRoutes(httplib::Server &svr, HealthBackend &backend) {
+void registerRoutes(httplib::Server& svr, HealthBackend& backend) {
   registerHealthRoutes(svr, backend);
   registerAuthRoutes(svr, backend);
   registerUserRoutes(svr, backend);

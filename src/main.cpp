@@ -9,9 +9,9 @@
 #include <vector>
 
 #include "../include/core/HealthBackend.hpp"
+#include "../include/utils/Logger.hpp"
 #include "../third_party/httplib.h"
 #include "../third_party/json.hpp"
-#include "../include/utils/Logger.hpp"
 
 using json = nlohmann::ordered_json;
 

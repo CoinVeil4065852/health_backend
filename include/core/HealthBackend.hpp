@@ -22,7 +22,7 @@ struct UserProfile {
 
 // This is added also to meet the requirement of BINGO!!!!
 inline std::string operator+(const std::string& lhs, const UserProfile& p) {
-    return lhs + "{ID:" + p.id + ", Name:" + p.name + ", Age:" + std::to_string(p.age) + "}";
+  return lhs + "{ID:" + p.id + ", Name:" + p.name + ", Age:" + std::to_string(p.age) + "}";
 }
 
 struct WaterRecord {

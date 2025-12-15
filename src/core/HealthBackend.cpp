@@ -1,18 +1,20 @@
 #include "../../include/core/HealthBackend.hpp"
-#include "../../third_party/json.hpp"
-#include "../../include/core/Storage.hpp"
 
-#include <unistd.h>     // readlink
+#include <unistd.h>  // readlink
+
+#include "../../include/core/Storage.hpp"
+#include "../../third_party/json.hpp"
 #ifdef __APPLE__
-#include <mach-o/dyld.h> // _NSGetExecutablePath
+#include <mach-o/dyld.h>  // _NSGetExecutablePath
 #endif
 
-#include <sys/stat.h>   // stat, mkdir
+#include <sys/stat.h>  // stat, mkdir
 #include <sys/types.h>
 
 #include <fstream>
-#include <random>
 #include <iostream>
+#include <random>
+
 #include "../../include/utils/Logger.hpp"
 
 // 使用 nlohmann::json 方便寫成 json
@@ -25,59 +27,54 @@ using nlohmann::json;
 // ----------------------
 
 HealthBackend::HealthBackend() {
-    storage_ = std::make_unique<Storage>();
-    loadFromFile();
+  storage_ = std::make_unique<Storage>();
+  loadFromFile();
 }
 
 HealthBackend::~HealthBackend() {
-    try {
-        saveToFile();
-    } catch (...) {
-        // 不讓 destructor 拋例外
-    }
+  try {
+    saveToFile();
+  } catch (...) {
+    // 不讓 destructor 拋例外
+  }
 }
 
 // ----------------------
 // Helper：產生 token
 // ----------------------
 
+// You may ask, why use recursion here instead of a simple loop?
+// It's just to meet the bingo chart requirement.
+static void recursiveTokenFill(std::string& token, int count, std::mt19937_64& rng,
+                               std::uniform_int_distribution<std::size_t>& dist, const char* chars) {
+  // Base case: if count is 0, stop recursion
+  if (count <= 0) return;
 
-//You may ask, why use recursion here instead of a simple loop?
-//It's just to meet the bingo chart requirement.
-static void recursiveTokenFill(std::string& token, 
-                               int count, 
-                               std::mt19937_64& rng, 
-                               std::uniform_int_distribution<std::size_t>& dist, 
-                               const char* chars) {
-    // Base case: if count is 0, stop recursion
-    if (count <= 0) return;
+  // Action: Generate one character and append it
+  token.push_back(chars[dist(rng)]);
 
-    // Action: Generate one character and append it
-    token.push_back(chars[dist(rng)]);
-
-    // Recursive step: Call itself with count - 1
-    recursiveTokenFill(token, count - 1, rng, dist, chars);
+  // Recursive step: Call itself with count - 1
+  recursiveTokenFill(token, count - 1, rng, dist, chars);
 }
 
-
 std::string HealthBackend::generateToken() const {
-    static const char chars[] =
-        "0123456789"
-        "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-        "abcdefghijklmnopqrstuvwxyz";
-    static constexpr std::size_t N = sizeof(chars) - 1;
+  static const char chars[] =
+      "0123456789"
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+      "abcdefghijklmnopqrstuvwxyz";
+  static constexpr std::size_t N = sizeof(chars) - 1;
 
-    std::random_device rd;
-    std::mt19937_64 rng(rd());
-    std::uniform_int_distribution<std::size_t> dist(0, N - 1);
+  std::random_device rd;
+  std::mt19937_64 rng(rd());
+  std::uniform_int_distribution<std::size_t> dist(0, N - 1);
 
-    std::string token;
-    token.reserve(32);
+  std::string token;
+  token.reserve(32);
 
-    // Replaced 'for' loop with 'strange' recursion
-    recursiveTokenFill(token, 32, rng, dist, chars);
+  // Replaced 'for' loop with 'strange' recursion
+  recursiveTokenFill(token, 32, rng, dist, chars);
 
-    return token;
+  return token;
 }
 
 // ----------------------
@@ -85,151 +82,149 @@ std::string HealthBackend::generateToken() const {
 // ----------------------
 
 void HealthBackend::loadFromFile() {
-    // Load from storage
-    json j = storage_->load();
-    if (j.is_null()) {
-        // file missing or parse error → treat as empty DB
-        return;
+  // Load from storage
+  json j = storage_->load();
+  if (j.is_null()) {
+    // file missing or parse error → treat as empty DB
+    return;
+  }
+
+  if (!j.contains("users") || !j["users"].is_array()) {
+    return;
+  }
+
+  for (const auto& ju : j["users"]) {
+    if (!ju.contains("name")) continue;
+    std::string name = ju.value("name", "");
+
+    UserData data;
+    data.profile.id = ju.value("id", name);
+    data.profile.name = name;
+    data.profile.age = ju.value("age", 0);
+    data.profile.weightKg = ju.value("weightKg", 0.0);
+    data.profile.heightM = ju.value("heightM", 0.0);
+    data.profile.gender = ju.value("gender", std::string("other"));
+
+    data.password = ju.value("password", std::string(""));
+
+    // Waters
+    if (ju.contains("waters") && ju["waters"].is_array()) {
+      for (const auto& jw : ju["waters"]) {
+        WaterRecord w;
+        w.datetime = jw.value("datetime", std::string(""));
+        w.amountMl = jw.value("amountMl", 0.0);
+        data.waters.push_back(w);
+      }
     }
 
-    if (!j.contains("users") || !j["users"].is_array()) {
-        return;
+    // Sleeps
+    if (ju.contains("sleeps") && ju["sleeps"].is_array()) {
+      for (const auto& js : ju["sleeps"]) {
+        SleepRecord s;
+        s.datetime = js.value("datetime", std::string(""));
+        s.hours = js.value("hours", 0.0);
+        data.sleeps.push_back(s);
+      }
     }
 
-    for (const auto& ju : j["users"]) {
-        if (!ju.contains("name")) continue;
-        std::string name = ju.value("name", "");
-
-        UserData data;
-        data.profile.id       = ju.value("id", name);
-        data.profile.name     = name;
-        data.profile.age      = ju.value("age", 0);
-        data.profile.weightKg = ju.value("weightKg", 0.0);
-        data.profile.heightM  = ju.value("heightM", 0.0);
-        data.profile.gender   = ju.value("gender", std::string("other"));
-
-        data.password         = ju.value("password", std::string(""));
-
-        // Waters
-        if (ju.contains("waters") && ju["waters"].is_array()) {
-            for (const auto& jw : ju["waters"]) {
-                WaterRecord w;
-                w.datetime = jw.value("datetime", std::string(""));
-                w.amountMl = jw.value("amountMl", 0.0);
-                data.waters.push_back(w);
-            }
-        }
-
-        // Sleeps
-        if (ju.contains("sleeps") && ju["sleeps"].is_array()) {
-            for (const auto& js : ju["sleeps"]) {
-                SleepRecord s;
-                s.datetime = js.value("datetime", std::string(""));
-                s.hours    = js.value("hours", 0.0);
-                data.sleeps.push_back(s);
-            }
-        }
-
-        // Activities
-        if (ju.contains("activities") && ju["activities"].is_array()) {
-            for (const auto& ja : ju["activities"]) {
-                ActivityRecord a;
-                a.datetime  = ja.value("datetime", std::string(""));
-                a.minutes   = ja.value("minutes", 0);
-                a.intensity = ja.value("intensity", std::string(""));
-                data.activities.push_back(a);
-            }
-        }
-
-        // Categories
-        if (ju.contains("categories") && ju["categories"].is_object()) {
-            for (auto it = ju["categories"].begin();
-                 it != ju["categories"].end(); ++it) {
-                const std::string catName = it.key();
-                const auto& arr = it.value();
-                if (!arr.is_array()) continue;
-
-                std::vector<CategoryItem> items;
-                for (const auto& ji : arr) {
-                    CategoryItem item;
-                    item.datetime = ji.value("datetime", std::string(""));
-                    item.note     = ji.value("note", std::string(""));
-                    item.value    = ji.value("value", 0.0);
-                    items.push_back(item);
-                }
-                data.categories[catName] = std::move(items);
-            }
-        }
-
-        usersByName[name] = std::move(data);
+    // Activities
+    if (ju.contains("activities") && ju["activities"].is_array()) {
+      for (const auto& ja : ju["activities"]) {
+        ActivityRecord a;
+        a.datetime = ja.value("datetime", std::string(""));
+        a.minutes = ja.value("minutes", 0);
+        a.intensity = ja.value("intensity", std::string(""));
+        data.activities.push_back(a);
+      }
     }
+
+    // Categories
+    if (ju.contains("categories") && ju["categories"].is_object()) {
+      for (auto it = ju["categories"].begin(); it != ju["categories"].end(); ++it) {
+        const std::string catName = it.key();
+        const auto& arr = it.value();
+        if (!arr.is_array()) continue;
+
+        std::vector<CategoryItem> items;
+        for (const auto& ji : arr) {
+          CategoryItem item;
+          item.datetime = ji.value("datetime", std::string(""));
+          item.note = ji.value("note", std::string(""));
+          item.value = ji.value("value", 0.0);
+          items.push_back(item);
+        }
+        data.categories[catName] = std::move(items);
+      }
+    }
+
+    usersByName[name] = std::move(data);
+  }
 }
 
 void HealthBackend::saveToFile() const {
+  json j;
+  j["users"] = json::array();
 
-    json j;
-    j["users"] = json::array();
+  for (const auto& [name, data] : usersByName) {
+    json ju;
+    ju["id"] = data.profile.id;
+    ju["name"] = data.profile.name;
+    ju["age"] = data.profile.age;
+    ju["weightKg"] = data.profile.weightKg;
+    ju["heightM"] = data.profile.heightM;
+    ju["gender"] = data.profile.gender;
 
-    for (const auto& [name, data] : usersByName) {
-        json ju;
-        ju["id"]       = data.profile.id;
-        ju["name"]     = data.profile.name;
-        ju["age"]      = data.profile.age;
-        ju["weightKg"] = data.profile.weightKg;
-        ju["heightM"]  = data.profile.heightM;
-        ju["gender"]   = data.profile.gender;
+    ju["password"] = data.password;
 
-        ju["password"] = data.password;
-
-        // Waters
-        ju["waters"] = json::array();
-        for (const auto& w : data.waters) {
-            json jw;
-            jw["datetime"] = w.datetime;
-            jw["amountMl"] = w.amountMl;
-            ju["waters"].push_back(jw);
-        }
-
-        // Sleeps
-        ju["sleeps"] = json::array();
-        for (const auto& s : data.sleeps) {
-            json js;
-            js["datetime"] = s.datetime;
-            js["hours"]    = s.hours;
-            ju["sleeps"].push_back(js);
-        }
-
-        // Activities
-        ju["activities"] = json::array();
-        for (const auto& a : data.activities) {
-            json ja;
-            ja["datetime"]  = a.datetime;
-            ja["minutes"]   = a.minutes;
-            ja["intensity"] = a.intensity;
-            ju["activities"].push_back(ja);
-        }
-
-        // Categories
-        ju["categories"] = json::object();
-        for (const auto& [catName, items] : data.categories) {
-            json arr = json::array();
-            for (const auto& item : items) {
-                json ji;
-                ji["datetime"] = item.datetime;
-                ji["note"]     = item.note;
-                ji["value"]    = item.value;
-                arr.push_back(ji);
-            }
-            ju["categories"][catName] = arr;
-        }
-
-        j["users"].push_back(ju);
+    // Waters
+    ju["waters"] = json::array();
+    for (const auto& w : data.waters) {
+      json jw;
+      jw["datetime"] = w.datetime;
+      jw["amountMl"] = w.amountMl;
+      ju["waters"].push_back(jw);
     }
 
-    if (!storage_->save(j)) {
-        util::Logger::error(std::string("Failed to open ") + storage_->path() + " for writing.");
-        return;
+    // Sleeps
+    ju["sleeps"] = json::array();
+    for (const auto& s : data.sleeps) {
+      json js;
+      js["datetime"] = s.datetime;
+      js["hours"] = s.hours;
+      ju["sleeps"].push_back(js);
     }
+
+    // Activities
+    ju["activities"] = json::array();
+    for (const auto& a : data.activities) {
+      json ja;
+      ja["datetime"] = a.datetime;
+      ja["minutes"] = a.minutes;
+      ja["intensity"] = a.intensity;
+      ju["activities"].push_back(ja);
+    }
+
+    // Categories
+    ju["categories"] = json::object();
+    for (const auto& [catName, items] : data.categories) {
+      json arr = json::array();
+      for (const auto& item : items) {
+        json ji;
+        ji["datetime"] = item.datetime;
+        ji["note"] = item.note;
+        ji["value"] = item.value;
+        arr.push_back(ji);
+      }
+      ju["categories"][catName] = arr;
+    }
+
+    j["users"].push_back(ju);
+  }
+
+  if (!storage_->save(j)) {
+    util::Logger::error(std::string("Failed to open ") + storage_->path() + " for writing.");
+    return;
+  }
 }
 
 // ----------------------
@@ -237,258 +232,236 @@ void HealthBackend::saveToFile() const {
 // ----------------------
 
 HealthBackend::UserData* HealthBackend::getUserByToken(const std::string& token) {
-    auto itTok = tokenToName.find(token);
-    if (itTok == tokenToName.end()) return nullptr;
-    auto itUser = usersByName.find(itTok->second);
-    if (itUser == usersByName.end()) return nullptr;
-    return &itUser->second;
+  auto itTok = tokenToName.find(token);
+  if (itTok == tokenToName.end()) return nullptr;
+  auto itUser = usersByName.find(itTok->second);
+  if (itUser == usersByName.end()) return nullptr;
+  return &itUser->second;
 }
 
 const HealthBackend::UserData* HealthBackend::getUserByToken(const std::string& token) const {
-    auto itTok = tokenToName.find(token);
-    if (itTok == tokenToName.end()) return nullptr;
-    auto itUser = usersByName.find(itTok->second);
-    if (itUser == usersByName.end()) return nullptr;
-    return &itUser->second;
+  auto itTok = tokenToName.find(token);
+  if (itTok == tokenToName.end()) return nullptr;
+  auto itUser = usersByName.find(itTok->second);
+  if (itUser == usersByName.end()) return nullptr;
+  return &itUser->second;
 }
 
 bool HealthBackend::hasUserForToken(const std::string& token) const {
-    return getUserByToken(token) != nullptr;
+  return getUserByToken(token) != nullptr;
 }
 
 // ----------------------
 // User / Auth
 // ----------------------
 
-bool HealthBackend::registerUser(const std::string& name,
-                                 int                age,
-                                 double             weightKg,
-                                 double             heightM,
-                                 const std::string& password,
-                                 const std::string& gender) {
-    if (name.empty() || password.empty()) return false;
-    if (age <= 0 || weightKg <= 0.0 || heightM <= 0.0) return false;
+bool HealthBackend::registerUser(const std::string& name, int age, double weightKg, double heightM,
+                                 const std::string& password, const std::string& gender) {
+  if (name.empty() || password.empty()) return false;
+  if (age <= 0 || weightKg <= 0.0 || heightM <= 0.0) return false;
 
-    if (usersByName.find(name) != usersByName.end()) {
-        // User already exists
-        return false;
-    }
+  if (usersByName.find(name) != usersByName.end()) {
+    // User already exists
+    return false;
+  }
 
-    UserData data;
-    data.profile.id       = name; // 簡單用 name 當 id
-    data.profile.name     = name;
-    data.profile.age      = age;
-    data.profile.weightKg = weightKg;
-    data.profile.heightM  = heightM;
-    data.profile.gender   = gender;
-    data.password         = password;
+  UserData data;
+  data.profile.id = name;  // 簡單用 name 當 id
+  data.profile.name = name;
+  data.profile.age = age;
+  data.profile.weightKg = weightKg;
+  data.profile.heightM = heightM;
+  data.profile.gender = gender;
+  data.password = password;
 
-    usersByName[name] = std::move(data);
-    saveToFile();
-    util::Logger::info(std::string("New User Registered: ") + usersByName[name].profile);
-    return true;
+  usersByName[name] = std::move(data);
+  saveToFile();
+  util::Logger::info(std::string("New User Registered: ") + usersByName[name].profile);
+  return true;
 }
 
-std::string HealthBackend::login(const std::string& name,
-                                 const std::string& password) {
-    auto it = usersByName.find(name);
-    if (it == usersByName.end()) {
-        util::Logger::warn(std::string("login: user not found: ") + name);
-        return "INVALID";
-    }
-    if (it->second.password != password) {
-        util::Logger::warn(std::string("login: bad password for user: ") + name);
-        return "INVALID";
-    }
+std::string HealthBackend::login(const std::string& name, const std::string& password) {
+  auto it = usersByName.find(name);
+  if (it == usersByName.end()) {
+    util::Logger::warn(std::string("login: user not found: ") + name);
+    return "INVALID";
+  }
+  if (it->second.password != password) {
+    util::Logger::warn(std::string("login: bad password for user: ") + name);
+    return "INVALID";
+  }
 
-    // 產生新的 token
-    std::string token = generateToken();
-    tokenToName[token] = name;
-    util::Logger::info(std::string("login: user= ") + name + " token=" + token);
-    return token;
+  // 產生新的 token
+  std::string token = generateToken();
+  tokenToName[token] = name;
+  util::Logger::info(std::string("login: user= ") + name + " token=" + token);
+  return token;
 }
 
-bool HealthBackend::getUserProfile(const std::string& token,
-                                   UserProfile&       outProfile) const {
-    const UserData* user = getUserByToken(token);
-    if (!user) return false;
-    outProfile = user->profile;
-    return true;
+bool HealthBackend::getUserProfile(const std::string& token, UserProfile& outProfile) const {
+  const UserData* user = getUserByToken(token);
+  if (!user) return false;
+  outProfile = user->profile;
+  return true;
 }
 
 double HealthBackend::getBMI(const std::string& token) const {
-    const UserData* user = getUserByToken(token);
-    if (!user) return 0.0;
+  const UserData* user = getUserByToken(token);
+  if (!user) return 0.0;
 
-    double height = user->profile.heightM;
-    double weight = user->profile.weightKg;
-    // Height: 0.5 m ~ 2.5 m
-    // Weight: 1 kg ~ 300 kg
-    if (height < 0.5 || height > 2.5) return 0.0;
-    if (weight < 1.0 || weight > 300.0) return 0.0;
+  double height = user->profile.heightM;
+  double weight = user->profile.weightKg;
+  // Height: 0.5 m ~ 2.5 m
+  // Weight: 1 kg ~ 300 kg
+  if (height < 0.5 || height > 2.5) return 0.0;
+  if (weight < 1.0 || weight > 300.0) return 0.0;
 
-    return weight / (height * height);
+  return weight / (height * height);
 }
 
 // ----------------------
 // Waters
 // ----------------------
 
-bool HealthBackend::addWater(const std::string& token,
-                             const std::string& datetime,
-                             double             amountMl) {
-    if (amountMl <= 0.0 ||amountMl >=5000.0 ) return false;
-    UserData* user = getUserByToken(token);
-    if (!user) return false;
+bool HealthBackend::addWater(const std::string& token, const std::string& datetime, double amountMl) {
+  if (amountMl <= 0.0 || amountMl >= 5000.0) return false;
+  UserData* user = getUserByToken(token);
+  if (!user) return false;
 
-    WaterRecord w;
-    w.datetime = datetime;
-    w.amountMl = amountMl;
-    user->waters.push_back(w);
-    saveToFile();
-    return true;
+  WaterRecord w;
+  w.datetime = datetime;
+  w.amountMl = amountMl;
+  user->waters.push_back(w);
+  saveToFile();
+  return true;
 }
 
 std::vector<WaterRecord> HealthBackend::getAllWater(const std::string& token) const {
-    const UserData* user = getUserByToken(token);
-    if (!user) return {};
-    return user->waters;
+  const UserData* user = getUserByToken(token);
+  if (!user) return {};
+  return user->waters;
 }
 
-bool HealthBackend::updateWater(const std::string& token,
-                                std::size_t       index,
-                                const std::string& newDatetime,
-                                double             newAmountMl) {
-    if (newAmountMl <= 0.0 ||newAmountMl >=5000.0) return false;
-    UserData* user = getUserByToken(token);
-    if (!user) return false;
-    if (index >= user->waters.size()) return false;
+bool HealthBackend::updateWater(const std::string& token, std::size_t index, const std::string& newDatetime,
+                                double newAmountMl) {
+  if (newAmountMl <= 0.0 || newAmountMl >= 5000.0) return false;
+  UserData* user = getUserByToken(token);
+  if (!user) return false;
+  if (index >= user->waters.size()) return false;
 
-    user->waters[index].datetime = newDatetime;
-    user->waters[index].amountMl = newAmountMl;
-    saveToFile();
-    return true;
+  user->waters[index].datetime = newDatetime;
+  user->waters[index].amountMl = newAmountMl;
+  saveToFile();
+  return true;
 }
 
-bool HealthBackend::deleteWater(const std::string& token,
-                                std::size_t       index) {
-    UserData* user = getUserByToken(token);
-    if (!user) return false;
-    if (index >= user->waters.size()) return false;
+bool HealthBackend::deleteWater(const std::string& token, std::size_t index) {
+  UserData* user = getUserByToken(token);
+  if (!user) return false;
+  if (index >= user->waters.size()) return false;
 
-    user->waters.erase(user->waters.begin() + static_cast<long>(index));
-    saveToFile();
-    return true;
+  user->waters.erase(user->waters.begin() + static_cast<long>(index));
+  saveToFile();
+  return true;
 }
 
 // ----------------------
 // Sleeps
 // ----------------------
 
-bool HealthBackend::addSleep(const std::string& token,
-                             const std::string& datetime,
-                             double             hours) {
-    if (hours < 0.0 || hours > 24.0) {
-        util::Logger::warn(std::string("addSleep: invalid hours: ") + std::to_string(hours));
-        return false;
-    }
-    UserData* user = getUserByToken(token);
-    if (!user) return false;
+bool HealthBackend::addSleep(const std::string& token, const std::string& datetime, double hours) {
+  if (hours < 0.0 || hours > 24.0) {
+    util::Logger::warn(std::string("addSleep: invalid hours: ") + std::to_string(hours));
+    return false;
+  }
+  UserData* user = getUserByToken(token);
+  if (!user) return false;
 
-    SleepRecord s;
-    s.datetime = datetime;
-    s.hours    = hours;
-    user->sleeps.push_back(s);
-    saveToFile();
-    util::Logger::info(std::string("addSleep: user token found, added sleep for token: ") + token);
-    return true;
+  SleepRecord s;
+  s.datetime = datetime;
+  s.hours = hours;
+  user->sleeps.push_back(s);
+  saveToFile();
+  util::Logger::info(std::string("addSleep: user token found, added sleep for token: ") + token);
+  return true;
 }
 
 std::vector<SleepRecord> HealthBackend::getAllSleep(const std::string& token) const {
-    const UserData* user = getUserByToken(token);
-    if (!user) return {};
-    return user->sleeps;
+  const UserData* user = getUserByToken(token);
+  if (!user) return {};
+  return user->sleeps;
 }
 
-bool HealthBackend::updateSleep(const std::string& token,
-                                std::size_t       index,
-                                const std::string& newDatetime,
-                                double             newHours) {
-    if (newHours < 0.0 || newHours >24.0) return false;
-    UserData* user = getUserByToken(token);
-    if (!user) return false;
-    if (index >= user->sleeps.size()) return false;
+bool HealthBackend::updateSleep(const std::string& token, std::size_t index, const std::string& newDatetime,
+                                double newHours) {
+  if (newHours < 0.0 || newHours > 24.0) return false;
+  UserData* user = getUserByToken(token);
+  if (!user) return false;
+  if (index >= user->sleeps.size()) return false;
 
-    user->sleeps[index].datetime = newDatetime;
-    user->sleeps[index].hours    = newHours;
-    saveToFile();
-    return true;
+  user->sleeps[index].datetime = newDatetime;
+  user->sleeps[index].hours = newHours;
+  saveToFile();
+  return true;
 }
 
-bool HealthBackend::deleteSleep(const std::string& token,
-                                std::size_t       index) {
-    UserData* user = getUserByToken(token);
-    if (!user) return false;
-    if (index >= user->sleeps.size()) return false;
+bool HealthBackend::deleteSleep(const std::string& token, std::size_t index) {
+  UserData* user = getUserByToken(token);
+  if (!user) return false;
+  if (index >= user->sleeps.size()) return false;
 
-    user->sleeps.erase(user->sleeps.begin() + static_cast<long>(index));
-    saveToFile();
-    return true;
+  user->sleeps.erase(user->sleeps.begin() + static_cast<long>(index));
+  saveToFile();
+  return true;
 }
 
 // ----------------------
 // Activities
 // ----------------------
 
-bool HealthBackend::addActivity(const std::string& token,
-                                const std::string& datetime,
-                                int                minutes,
+bool HealthBackend::addActivity(const std::string& token, const std::string& datetime, int minutes,
                                 const std::string& intensity) {
-    if (minutes <= 0 || minutes > 1440.0) return false;
-    UserData* user = getUserByToken(token);
-    if (!user) return false;
+  if (minutes <= 0 || minutes > 1440.0) return false;
+  UserData* user = getUserByToken(token);
+  if (!user) return false;
 
-    ActivityRecord a;
-    a.datetime  = datetime;
-    a.minutes   = minutes;
-    a.intensity = intensity;
-    user->activities.push_back(a);
-    saveToFile();
-    return true;
+  ActivityRecord a;
+  a.datetime = datetime;
+  a.minutes = minutes;
+  a.intensity = intensity;
+  user->activities.push_back(a);
+  saveToFile();
+  return true;
 }
 
 std::vector<ActivityRecord> HealthBackend::getAllActivity(const std::string& token) const {
-    const UserData* user = getUserByToken(token);
-    if (!user) return {};
-    return user->activities;
+  const UserData* user = getUserByToken(token);
+  if (!user) return {};
+  return user->activities;
 }
 
-bool HealthBackend::updateActivity(const std::string& token,
-                                   std::size_t       index,
-                                   const std::string& newDatetime,
-                                   int                newMinutes,
-                                   const std::string& newIntensity) {
-    if (newMinutes <= 0 || newMinutes > 1440.0) return false;
-    UserData* user = getUserByToken(token);
-    if (!user) return false;
-    if (index >= user->activities.size()) return false;
+bool HealthBackend::updateActivity(const std::string& token, std::size_t index, const std::string& newDatetime,
+                                   int newMinutes, const std::string& newIntensity) {
+  if (newMinutes <= 0 || newMinutes > 1440.0) return false;
+  UserData* user = getUserByToken(token);
+  if (!user) return false;
+  if (index >= user->activities.size()) return false;
 
-    user->activities[index].datetime  = newDatetime;
-    user->activities[index].minutes   = newMinutes;
-    user->activities[index].intensity = newIntensity;
-    saveToFile();
-    return true;
+  user->activities[index].datetime = newDatetime;
+  user->activities[index].minutes = newMinutes;
+  user->activities[index].intensity = newIntensity;
+  saveToFile();
+  return true;
 }
 
-bool HealthBackend::deleteActivity(const std::string& token,
-                                   std::size_t       index) {
-    UserData* user = getUserByToken(token);
-    if (!user) return false;
-    if (index >= user->activities.size()) return false;
+bool HealthBackend::deleteActivity(const std::string& token, std::size_t index) {
+  UserData* user = getUserByToken(token);
+  if (!user) return false;
+  if (index >= user->activities.size()) return false;
 
-    user->activities.erase(user->activities.begin() + static_cast<long>(index));
-    saveToFile();
-    return true;
+  user->activities.erase(user->activities.begin() + static_cast<long>(index));
+  saveToFile();
+  return true;
 }
 
 // ----------------------
@@ -496,108 +469,93 @@ bool HealthBackend::deleteActivity(const std::string& token,
 // ----------------------
 
 std::vector<std::string> HealthBackend::getOtherCategories(const std::string& token) const {
-    const UserData* user = getUserByToken(token);
-    if (!user) return {};
+  const UserData* user = getUserByToken(token);
+  if (!user) return {};
 
-    std::vector<std::string> cats;
-    for (const auto& [name, _vec] : user->categories) {
-        cats.push_back(name);
-    }
-    return cats;
+  std::vector<std::string> cats;
+  for (const auto& [name, _vec] : user->categories) {
+    cats.push_back(name);
+  }
+  return cats;
 }
 
-bool HealthBackend::createCategory(const std::string& token,
-                                   const std::string& name)
-{
-    if (name.empty()) return false;
-    UserData* user = getUserByToken(token);
-    if (!user) return false;
+bool HealthBackend::createCategory(const std::string& token, const std::string& name) {
+  if (name.empty()) return false;
+  UserData* user = getUserByToken(token);
+  if (!user) return false;
 
-    if (user->categories.find(name) != user->categories.end())
-        return false; // 已存在
+  if (user->categories.find(name) != user->categories.end()) return false;  // 已存在
 
-    user->categories[name] = {};  // 建立空 category
-    saveToFile();
-    return true;
+  user->categories[name] = {};  // 建立空 category
+  saveToFile();
+  return true;
 }
 
-bool HealthBackend::addOtherRecord(const std::string& token,
-                                   const std::string& categoryName,
-                                   const std::string& datetime,
-                                   double             value,
-                                   const std::string& note)
-{
-    UserData* user = getUserByToken(token);
-    if (!user) return false;
+bool HealthBackend::addOtherRecord(const std::string& token, const std::string& categoryName,
+                                   const std::string& datetime, double value, const std::string& note) {
+  UserData* user = getUserByToken(token);
+  if (!user) return false;
 
-    auto it = user->categories.find(categoryName);
-    if (it == user->categories.end())
-        return false;              // ❌ category 不存在 → 回傳 false
+  auto it = user->categories.find(categoryName);
+  if (it == user->categories.end()) return false;  // ❌ category 不存在 → 回傳 false
 
-    CategoryItem item;
-    item.datetime = datetime;
-    item.note     = note;
-    item.value    = value;
+  CategoryItem item;
+  item.datetime = datetime;
+  item.note = note;
+  item.value = value;
 
-    it->second.push_back(item);
-    saveToFile();
-    return true;
+  it->second.push_back(item);
+  saveToFile();
+  return true;
 }
 
 std::vector<CategoryItem> HealthBackend::getOtherRecords(const std::string& token,
                                                          const std::string& categoryName) const {
-    const UserData* user = getUserByToken(token);
-    if (!user) return {};
-    auto it = user->categories.find(categoryName);
-    if (it == user->categories.end()) return {};
-    return it->second;
+  const UserData* user = getUserByToken(token);
+  if (!user) return {};
+  auto it = user->categories.find(categoryName);
+  if (it == user->categories.end()) return {};
+  return it->second;
 }
 
-bool HealthBackend::updateOtherRecord(const std::string& token,
-                                      const std::string& categoryName,
-                                      std::size_t       index,
-                                      const std::string& newDatetime,
-                                      double             newValue,
-                                      const std::string& newNote) {
-    UserData* user = getUserByToken(token);
-    if (!user) return false;
-    auto it = user->categories.find(categoryName);
-    if (it == user->categories.end()) return false;
-    auto& vec = it->second;
-    if (index >= vec.size()) return false;
+bool HealthBackend::updateOtherRecord(const std::string& token, const std::string& categoryName, std::size_t index,
+                                      const std::string& newDatetime, double newValue, const std::string& newNote) {
+  UserData* user = getUserByToken(token);
+  if (!user) return false;
+  auto it = user->categories.find(categoryName);
+  if (it == user->categories.end()) return false;
+  auto& vec = it->second;
+  if (index >= vec.size()) return false;
 
-    vec[index].datetime = newDatetime;
-    vec[index].note     = newNote;
-    vec[index].value    = newValue;
-    saveToFile();
-    return true;
+  vec[index].datetime = newDatetime;
+  vec[index].note = newNote;
+  vec[index].value = newValue;
+  saveToFile();
+  return true;
 }
 
-bool HealthBackend::deleteOtherRecord(const std::string& token,
-                                      const std::string& categoryName,
-                                      std::size_t       index) {
-    UserData* user = getUserByToken(token);
-    if (!user) return false;
-    auto it = user->categories.find(categoryName);
-    if (it == user->categories.end()) return false;
+bool HealthBackend::deleteOtherRecord(const std::string& token, const std::string& categoryName, std::size_t index) {
+  UserData* user = getUserByToken(token);
+  if (!user) return false;
+  auto it = user->categories.find(categoryName);
+  if (it == user->categories.end()) return false;
 
-    auto& vec = it->second;
-    if (index >= vec.size()) return false;
+  auto& vec = it->second;
+  if (index >= vec.size()) return false;
 
-    vec.erase(vec.begin() + static_cast<long>(index));
-    saveToFile();
-    return true;
+  vec.erase(vec.begin() + static_cast<long>(index));
+  saveToFile();
+  return true;
 }
 
 // 刪掉整個 category，不管裡面有沒有 item
-bool HealthBackend::deleteCategory(const std::string& token,
-                                   const std::string& categoryName) {
-    UserData* user = getUserByToken(token);
-    if (!user) return false;
-    auto it = user->categories.find(categoryName);
-    if (it == user->categories.end()) return false;
+bool HealthBackend::deleteCategory(const std::string& token, const std::string& categoryName) {
+  UserData* user = getUserByToken(token);
+  if (!user) return false;
+  auto it = user->categories.find(categoryName);
+  if (it == user->categories.end()) return false;
 
-    user->categories.erase(it);   // 直接整個刪掉這個 category
-    saveToFile();
-    return true;
+  user->categories.erase(it);  // 直接整個刪掉這個 category
+  saveToFile();
+  return true;
 }

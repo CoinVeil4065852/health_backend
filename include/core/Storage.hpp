@@ -1,12 +1,13 @@
 #pragma once
 
-#include "../../third_party/json.hpp"
 #include <string>
+
+#include "../../third_party/json.hpp"
 
 class Storage {
  public:
   Storage();
-  explicit Storage(const std::string &path);
+  explicit Storage(const std::string& path);
 
   std::string path() const { return storagePath; }
 
@@ -14,11 +15,11 @@ class Storage {
   nlohmann::json load() const;
 
   // Save JSON to storage; returns true on success
-  bool save(const nlohmann::json &j) const;
+  bool save(const nlohmann::json& j) const;
 
  private:
   std::string storagePath;
 
-  static bool dirExists(const std::string &path);
+  static bool dirExists(const std::string& path);
   void ensureStorageDirExists() const;
 };

@@ -2,6 +2,8 @@
 
 #include "core/HealthBackend.hpp"
 
-namespace httplib { class Server; }
+namespace httplib {
+class Server;
+}
 
-void registerWaterRoutes(httplib::Server &svr, HealthBackend &backend);
+void registerWaterRoutes(httplib::Server& svr, HealthBackend& backend);

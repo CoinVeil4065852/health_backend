@@ -1,7 +1,4 @@
 #include "../../include/server/ServerSetup.hpp"
-#include "../../third_party/httplib.h"
-#include "../../third_party/json.hpp"
-#include "../../include/utils/Logger.hpp"
 
 #include <chrono>
 #include <cstdlib>
@@ -9,6 +6,10 @@
 #include <mutex>
 #include <string>
 #include <unordered_map>
+
+#include "../../include/utils/Logger.hpp"
+#include "../../third_party/httplib.h"
+#include "../../third_party/json.hpp"
 
 using json = nlohmann::ordered_json;
 
@@ -36,7 +37,7 @@ void initLoggerFromEnv() {
   util::Logger::init(logFilePath, level);
 }
 
-void setupServerCommon(httplib::Server &svr) {
+void setupServerCommon(httplib::Server& svr) {
   // CORS preflight
   svr.Options(R"(.*)", [](const httplib::Request& req, httplib::Response& res) {
     res.set_header("Access-Control-Allow-Origin", "*");
@@ -61,13 +62,14 @@ void setupServerCommon(httplib::Server &svr) {
   });
 
   // Pre-routing: record start time and basic request info
-  svr.set_pre_routing_handler([&](const httplib::Request& req, httplib::Response& /*res*/) -> httplib::Server::HandlerResponse {
-    std::lock_guard<std::mutex> lk(g_req_mtx);
-    g_req_start[&req] = std::chrono::steady_clock::now();
-    auto origin = req.has_header("Origin") ? req.get_header_value("Origin") : "-";
-    util::Logger::info(req.method + std::string(" ") + req.path + " Origin:" + origin);
-    return httplib::Server::HandlerResponse::Unhandled;
-  });
+  svr.set_pre_routing_handler(
+      [&](const httplib::Request& req, httplib::Response& /*res*/) -> httplib::Server::HandlerResponse {
+        std::lock_guard<std::mutex> lk(g_req_mtx);
+        g_req_start[&req] = std::chrono::steady_clock::now();
+        auto origin = req.has_header("Origin") ? req.get_header_value("Origin") : "-";
+        util::Logger::info(req.method + std::string(" ") + req.path + " Origin:" + origin);
+        return httplib::Server::HandlerResponse::Unhandled;
+      });
 
   // Post-routing: add CORS headers if missing and log duration
   svr.set_post_routing_handler([&](const httplib::Request& req, httplib::Response& res) {
@@ -91,8 +93,10 @@ void setupServerCommon(httplib::Server &svr) {
       }
     }
     if (start.time_since_epoch().count() > 0) {
-      auto dur = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count();
-      util::Logger::info(req.method + std::string(" ") + req.path + " -> " + std::to_string(res.status) + " (" + std::to_string(dur) + " ms)");
+      auto dur =
+          std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count();
+      util::Logger::info(req.method + std::string(" ") + req.path + " -> " + std::to_string(res.status) + " (" +
+                         std::to_string(dur) + " ms)");
     }
   });
 
@@ -108,7 +112,7 @@ void setupServerCommon(httplib::Server &svr) {
   });
 }
 
-void startServer(httplib::Server &svr) {
+void startServer(httplib::Server& svr) {
   std::cout << "--- Health Backend Server ---" << std::endl;
   std::cout << "Enter custom port (or 0 for default 8080): ";
   int portInput = 0;
@@ -122,4 +126,4 @@ void startServer(httplib::Server &svr) {
   util::Logger::shutdown();
 }
 
-} // namespace server
+}  // namespace server
