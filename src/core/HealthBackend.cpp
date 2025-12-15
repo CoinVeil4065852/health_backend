@@ -1,5 +1,6 @@
-#include "HealthBackend.hpp"
-#include "../external/json.hpp"
+#include "../../include/core/HealthBackend.hpp"
+#include "../../third_party/json.hpp"
+#include "../../include/core/Storage.hpp"
 
 #include <unistd.h>     // readlink
 #ifdef __APPLE__
@@ -12,79 +13,20 @@
 #include <fstream>
 #include <random>
 #include <iostream>
-#include "../helpers/Logger.hpp"
+#include "../../include/utils/Logger.hpp"
 
 // 使用 nlohmann::json 方便寫成 json
 using nlohmann::json;
 
-// 小工具：檢查資料夾是否存在
-static bool dirExists(const std::string &path) {
-    struct stat st {};
-    if (stat(path.c_str(), &st) != 0) return false;
-    return S_ISDIR(st.st_mode);
-}
-
-// ----------------------
-// 初始化：決定 storagePath
-// ----------------------
-
-void HealthBackend::initStoragePath() {
-    char exePath[1024] = {0};
-    std::string exeDir = ".";
-
-#if defined(__APPLE__)
-    // macOS: 用 _NSGetExecutablePath
-    uint32_t size = sizeof(exePath);
-    if (_NSGetExecutablePath(exePath, &size) == 0) {
-        exeDir = exePath;
-    }
-#elif defined(__linux__)
-    // Linux: 讀 /proc/self/exe
-    ssize_t len = readlink("/proc/self/exe", exePath, sizeof(exePath) - 1);
-    if (len != -1) {
-        exePath[len] = '\0';
-        exeDir = exePath;
-    }
-#else
-    exeDir = ".";
-#endif
-
-    // 去掉檔名字，只留下資料夾
-    auto pos = exeDir.find_last_of("/\\");
-    if (pos != std::string::npos) {
-        exeDir = exeDir.substr(0, pos);
-    }
-
-    // data 資料夾 & storage.json
-    std::string dataFolder = exeDir + "/data";
-    storagePath = dataFolder + "/storage.json";
-    // 強制存檔到專案目錄的相對路徑，不使用真實執行檔路徑
-    storagePath = "data/storage.json";
-}
-
-// 建立 data/ 資料夾（如果不存在）
-void HealthBackend::ensureStorageDirExists() const {
-    // 從 storagePath 反推資料夾
-    auto pos = storagePath.find_last_of("/\\");
-    if (pos == std::string::npos) {
-        return; // 找不到資料夾路徑就算了（會寫在當前目錄）
-    }
-    std::string dir = storagePath.substr(0, pos);
-
-    if (!dirExists(dir)) {
-        // 0755： rwxr-xr-x
-        mkdir(dir.c_str(), 0755);
-    }
-}
+// Storage handles storage path and directory creation.
 
 // ----------------------
 // 建構 / 解構：處理載入 / 儲存
 // ----------------------
 
 HealthBackend::HealthBackend() {
-    initStoragePath();        // ⭐ 依照執行檔位置決定 data/storage.json
-    ensureStorageDirExists(); // ⭐ 確保 data/ 存在
-    loadFromFile();           // ⭐ 嘗試載入舊有資料
+    storage_ = std::make_unique<Storage>();
+    loadFromFile();
 }
 
 HealthBackend::~HealthBackend() {
@@ -143,17 +85,10 @@ std::string HealthBackend::generateToken() const {
 // ----------------------
 
 void HealthBackend::loadFromFile() {
-    std::ifstream in(storagePath);
-    if (!in) {
-        // 檔案不存在 → 視為空資料庫
-        return;
-    }
-
-    json j;
-    try {
-        in >> j;
-    } catch (...) {
-        util::Logger::error(std::string("Failed to parse ") + storagePath + ", starting empty.");
+    // Load from storage
+    json j = storage_->load();
+    if (j.is_null()) {
+        // file missing or parse error → treat as empty DB
         return;
     }
 
@@ -231,7 +166,6 @@ void HealthBackend::loadFromFile() {
 }
 
 void HealthBackend::saveToFile() const {
-    ensureStorageDirExists();  // ⭐ 存檔前再確認一次資料夾存在
 
     json j;
     j["users"] = json::array();
@@ -292,12 +226,10 @@ void HealthBackend::saveToFile() const {
         j["users"].push_back(ju);
     }
 
-    std::ofstream out(storagePath);
-    if (!out) {
-        util::Logger::error(std::string("Failed to open ") + storagePath + " for writing.");
+    if (!storage_->save(j)) {
+        util::Logger::error(std::string("Failed to open ") + storage_->path() + " for writing.");
         return;
     }
-    out << j.dump(2);
 }
 
 // ----------------------

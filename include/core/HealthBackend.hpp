@@ -1,6 +1,9 @@
 #pragma once
 
 #include <map>
+#include <memory>
+
+class Storage;
 #include <string>
 #include <vector>
 
@@ -111,11 +114,8 @@ class HealthBackend {
   std::map<std::string, UserData> usersByName;
   std::map<std::string, std::string> tokenToName;
 
-  std::string storagePath;
-
-  // 檔案 / 路徑相關
-  void initStoragePath();               // 設定 storagePath
-  void ensureStorageDirExists() const;  // 確保資料夾存在
+  // Storage manages persistence to disk
+  std::unique_ptr<Storage> storage_;
 
   // JSON I/O
   void loadFromFile();
