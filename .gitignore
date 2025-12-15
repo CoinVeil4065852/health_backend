@@ -34,7 +34,7 @@ Makefile
 # ==========================
 #   Executables
 # ==========================
-server
+
 main
 run
 
