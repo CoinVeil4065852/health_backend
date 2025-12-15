@@ -7,5 +7,5 @@ class HealthBackend;
 }
 
 namespace routes {
-void registerAuthRoutes(httplib::Server& svr, health::HealthBackend& backend);
+void registerAuthRoutes(httplib::Server &svr, health::HealthBackend &backend);
 } // namespace routes

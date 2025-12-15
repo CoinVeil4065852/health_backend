@@ -1,15 +1,15 @@
 #pragma once
 
-#include <string>
-#include <mutex>
 #include <fstream>
+#include <mutex>
+#include <string>
 
 namespace util {
 
 enum class LogLevel { Debug, Info, Warning, Error };
 
 class Logger {
-public:
+  public:
     static void init(const std::string &filePath, LogLevel level = LogLevel::Info);
     static void shutdown();
 
@@ -18,12 +18,12 @@ public:
     static void warn(const std::string &msg);
     static void error(const std::string &msg);
 
-private:
+  private:
     static std::string timeStamp();
     static void log(LogLevel level, const std::string &msg);
 
     static std::mutex mtx_;
-    static std::ofstream out_;    // optional file
+    static std::ofstream out_; // optional file
     static LogLevel level_;
 };
 

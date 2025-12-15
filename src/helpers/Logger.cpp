@@ -1,8 +1,8 @@
 #include "Logger.hpp"
-#include <iostream>
 #include <chrono>
 #include <filesystem>
 #include <iomanip>
+#include <iostream>
 
 namespace util {
 
@@ -16,7 +16,8 @@ void Logger::init(const std::string &filePath, LogLevel level) {
     if (!filePath.empty()) {
         try {
             std::filesystem::path p(filePath);
-            if (p.has_parent_path()) std::filesystem::create_directories(p.parent_path());
+            if (p.has_parent_path())
+                std::filesystem::create_directories(p.parent_path());
         } catch (...) {
             // ignore failures creating directory
         }
@@ -43,13 +44,22 @@ std::string Logger::timeStamp() {
 
 void Logger::log(LogLevel level, const std::string &msg) {
     std::lock_guard<std::mutex> lk(mtx_);
-    if (level < level_) return;
+    if (level < level_)
+        return;
     std::string lvl;
     switch (level) {
-        case LogLevel::Debug: lvl = "DEBUG"; break;
-        case LogLevel::Info: lvl = "INFO"; break;
-        case LogLevel::Warning: lvl = "WARN"; break;
-        case LogLevel::Error: lvl = "ERROR"; break;
+    case LogLevel::Debug:
+        lvl = "DEBUG";
+        break;
+    case LogLevel::Info:
+        lvl = "INFO";
+        break;
+    case LogLevel::Warning:
+        lvl = "WARN";
+        break;
+    case LogLevel::Error:
+        lvl = "ERROR";
+        break;
     }
     std::ostringstream oss;
     oss << "[" << timeStamp() << "] [" << lvl << "] " << msg << "\n";
@@ -64,8 +74,8 @@ void Logger::log(LogLevel level, const std::string &msg) {
 }
 
 void Logger::debug(const std::string &msg) { log(LogLevel::Debug, msg); }
-void Logger::info(const std::string &msg)  { log(LogLevel::Info, msg); }
-void Logger::warn(const std::string &msg)  { log(LogLevel::Warning, msg); }
+void Logger::info(const std::string &msg) { log(LogLevel::Info, msg); }
+void Logger::warn(const std::string &msg) { log(LogLevel::Warning, msg); }
 void Logger::error(const std::string &msg) { log(LogLevel::Error, msg); }
 
 } // namespace util
