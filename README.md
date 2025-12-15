@@ -2,22 +2,38 @@
 
 > This is a final project for the course DBME 2008 程式語言 at NTU.
 
+**Project Structure**
+
+- `src/` - source files (server, backend, helpers) and internal headers
+- `src/` - source files and internal headers (`src/backend/HealthBackend.hpp`)
+- `data/` - runtime storage (`storage.json`)
+- `test/` - API tests (Node.js)
+
+
 - Health Backend is a C++ health tracking server that provides RESTful APIs for managing user health data, including water intake, sleep, activity, BMI, and custom biomedical-related records.
 
 - The backend is designed to work with a front-end dashboard and stores data locally using JSON files.
 
 ## Build
- ```txt
-g++ -std=c++17 \
-    server.cpp \
-    backend/HealthBackend.cpp \
-    helpers/Logger.cpp \
-    -o server_app
+
+- Build with `make`:
+
+```sh
+make
 ./server_app
 ```
-```txt
-Expected output: Server started at http://0.0.0.0:8080
+
+- Or use `cmake`:
+
+```sh
+mkdir -p build && cd build
+cmake ..
+cmake --build .
+./server_app
 ```
+
+Expected output: Server started at http://0.0.0.0:8080
+
 
 ## Frontend
 - [2025_Fall_Programming_Languages_Final_Project_Frontend](https://github.com/CoinVeil4065852/2025_Fall_Programming_Languages_Final_Project_Frontend.git) is the official backend for this project. Go to the page to see more.

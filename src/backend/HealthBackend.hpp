@@ -8,6 +8,8 @@
 // 基本資料結構
 // ----------------------
 
+namespace health {
+
 struct UserProfile {
     std::string id;
     std::string name;
@@ -145,6 +147,9 @@ private:
 
     std::string storagePath;
 
+    // grant access to storage helper
+    friend class HealthStorage;
+
     // 檔案 / 路徑相關
     void initStoragePath();             // 設定 storagePath
     void ensureStorageDirExists() const; // 確保資料夾存在
@@ -158,3 +163,5 @@ private:
     UserData*       getUserByToken(const std::string& token);
     const UserData* getUserByToken(const std::string& token) const;
 };
+
+} // namespace health

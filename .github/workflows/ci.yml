@@ -1,0 +1,33 @@
+name: CI
+
+on: [push, pull_request]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+      - name: Build
+        run: make
+      - name: Start server
+        run: nohup ./server_app > server.log 2>&1 &
+      - name: Wait for server
+        run: |
+          for i in {1..10}; do
+            if curl -sSf http://localhost:8080/health; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Wait for server
+        run: |
+          for i in {1..10}; do
+            if curl -sSf http://localhost:8080/health; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Run tests
+        run: node ./test/test.js

@@ -1,3 +1,14 @@
+# Build artifacts
+server_app
+examples/main_app
+
+# Logs and runtime artifacts
+/logs/
+/data/storage.json
+.server_pid
+
+# Node test output
+node_modules/
 # ==========================
 #   Build Artifacts
 # ==========================
@@ -60,6 +71,5 @@ data/*
 # Keep your source JSON config if needed:
 !config.json
 
-!external/json.hpp        
 
 server_app
